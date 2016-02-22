@@ -20,6 +20,8 @@
 #ifndef BOOST_PHOENIX_NO_VARIADIC_FUNCTION_EVAL
 #   include <boost/mpl/if.hpp>
 #   include <boost/type_traits/is_reference.hpp>
+#   include <boost/type_traits/declval.hpp>
+#   include <boost/phoenix/core/detail/index_sequence.hpp>
 #endif
 
 // XXX: Currently, we should use preprocessed files since
@@ -75,13 +77,35 @@ namespace boost { namespace phoenix {
 
         #include <boost/phoenix/core/detail/cpp03/function_eval.hpp>
 #else
-            template <typename, typename, typename...> struct result_impl;
+            template <std::size_t I, typename T> struct indexer { typedef T type; };
 
-            template <typename F, typename... A, typename Head, typename... Tail>
-            struct result_impl<F, void(A...), Head, Tail...>
-                : result_impl<F, void(A..., Head), Tail...>
+            template <typename Indicies, typename Init, typename... T>
+            struct separator_impl;
+
+            template <std::size_t... Indicies, std::size_t... Init, typename... T>
+            struct separator_impl<detail::index_sequence<Indicies...>, detail::index_sequence<Init...>, T...>
+                : indexer<Indicies, T>...
+            {
+                template <std::size_t N, typename U>
+                static indexer<N, U> nth_type(indexer<N, U> const&);
+
+                typedef void init(typename decltype(nth_type<Init>(boost::declval<separator_impl>()))::type...);
+
+                typedef typename
+                    decltype(nth_type<sizeof...(T) - 1>(boost::declval<separator_impl>()))::type
+                last;
+            };
+
+            template <typename... A> struct separator
+                : separator_impl<
+                    typename detail::make_index_sequence<sizeof...(A)>::type,
+                    typename detail::make_index_sequence<sizeof...(A) - 1>::type,
+                    A...
+                >
             {
             };
+
+            template <typename, typename, typename> struct result_impl;
 
             template <typename F, typename... A, typename Context>
             struct result_impl<F, void(A...), Context>
@@ -113,7 +137,7 @@ namespace boost { namespace phoenix {
 
             template <typename This, typename F, typename... A>
             struct result<This(F, A...)>
-                : result_impl<F, void(), A...>
+                : result_impl<F, typename separator<A...>::init, typename separator<A...>::last>
             {
             };
 
