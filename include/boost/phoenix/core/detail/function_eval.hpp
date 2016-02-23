@@ -77,28 +77,28 @@ namespace boost { namespace phoenix {
 
         #include <boost/phoenix/core/detail/cpp03/function_eval.hpp>
 #else
-            template <std::size_t I, typename T> struct indexer { typedef T type; };
-
-            template <typename Indicies, typename Init, typename... T>
+            template <typename Init, typename... T>
             struct separator_impl;
 
-            template <std::size_t... Indicies, std::size_t... Init, typename... T>
-            struct separator_impl<detail::index_sequence<Indicies...>, detail::index_sequence<Init...>, T...>
-                : indexer<Indicies, T>...
+            template <std::size_t... Init, typename... T>
+            struct separator_impl<detail::index_sequence<Init...>, T...>
             {
-                template <std::size_t N, typename U>
-                static indexer<N, U> nth_type(indexer<N, U> const&);
+                template <std::size_t N> struct eat{ template <typename U> eat(U); };
 
-                typedef void init(typename decltype(nth_type<Init>(boost::declval<separator_impl>()))::type...);
+                template <typename I> struct at;
+                template <std::size_t... I>
+                struct at<detail::index_sequence<I...> >
+                {
+                    template <typename U> static U lookup(eat<I>..., U, ...);
+                    static decltype(lookup(boost::declval<mpl::identity<T> >()...)) do_lookup();
+                };
 
-                typedef typename
-                    decltype(nth_type<sizeof...(T) - 1>(boost::declval<separator_impl>()))::type
-                last;
+                typedef void init(typename decltype(at<typename detail::make_index_sequence<Init>::type>::do_lookup())::type...);
+                typedef typename decltype(at<typename detail::make_index_sequence<sizeof...(Init)>::type>::do_lookup())::type last;
             };
 
             template <typename... A> struct separator
                 : separator_impl<
-                    typename detail::make_index_sequence<sizeof...(A)>::type,
                     typename detail::make_index_sequence<sizeof...(A) - 1>::type,
                     A...
                 >
