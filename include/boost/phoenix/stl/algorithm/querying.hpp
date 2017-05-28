@@ -3,6 +3,7 @@
 // Copyright 2005 Dan Marsden.
 // Copyright 2008 Hartmut Kaiser.
 // Copyright 2015 John Fletcher.
+// Copyright 2017 Kohei Takahashi.
 //
 // Use, modification and distribution is subject to the Boost Software
 // License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
@@ -30,6 +31,10 @@
 //#include <boost/range/result_iterator.hpp> is deprecated
 #include <boost/range/iterator.hpp>
 #include <boost/range/difference_type.hpp>
+
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX14_ALGORITHMS
+#include <boost/core/enable_if.hpp>
+#endif
 
 namespace boost { namespace phoenix {
     namespace impl
@@ -83,6 +88,26 @@ namespace boost { namespace phoenix {
                 return std::find_if(detail::begin_(r), detail::end_(r), p);
             }
         };
+
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX11_ALGORITHMS
+        struct find_if_not
+        {
+            template <typename Sig>
+            struct result;
+
+            template <typename This, class R, class P>
+            struct result<This(R&, P)>
+                : range_iterator<R>
+            {};
+
+            template<class R, class P>
+            typename range_iterator<R>::type
+            operator()(R& r, P p) const
+            {
+                return std::find_if_not(detail::begin_(r), detail::end_(r), p);
+            }
+        };
+#endif
 
         struct find_end
         {
@@ -265,6 +290,25 @@ namespace boost { namespace phoenix {
             {
                 return std::equal(detail::begin_(r), detail::end_(r), i, p);
             }
+
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX14_ALGORITHMS
+            template<class R, class R2>
+            typename boost::enable_if_has_type<typename range_iterator<R2>::type, bool>::type
+            operator()(R& r, R2& r2) const
+            {
+                return std::equal(detail::begin_(r), detail::end_(r)
+                                , detail::begin_(r2), detail::end_(r2));
+            }
+
+            template<class R, class R2, class P>
+            typename boost::enable_if_has_type<typename range_iterator<R2>::type, bool>::type
+            operator()(R& r, R2& r2, P p) const
+            {
+                return std::equal(detail::begin_(r), detail::end_(r)
+                                , detail::begin_(r2), detail::end_(r2)
+                                , p);
+            }
+#endif
         };
 
         struct search
@@ -306,6 +350,20 @@ namespace boost { namespace phoenix {
                     , p
                     );
             }
+
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX17_ALGORITHMS
+            // At this point, we assume all features of C++11 are avaiable.
+            template<class R, class S, class I = typename range_iterator<R>::type>
+            auto operator()(R& r, const S& s) const
+                -> typename boost::enable_if_has_type<decltype(s(std::declval<I>(), std::declval<I>())), I>::type
+            {
+                return std::search(
+                    detail::begin_(r)
+                    , detail::end_(r)
+                    , s
+                    );
+            }
+#endif
         };
 
         struct lower_bound 
@@ -454,7 +512,7 @@ namespace boost { namespace phoenix {
 
         namespace result_of
         {
-            template <typename R, typename I, typename P = void>
+            template <typename R, typename I, typename P = void, typename = void>
             struct mismatch
             {
                 typedef std::pair<
@@ -462,6 +520,18 @@ namespace boost { namespace phoenix {
                     , typename detail::decay_array<I>::type
                 > type;
             };
+
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX14_ALGORITHMS
+            template <typename R, typename R2, typename P>
+            struct mismatch<R, R2, P,
+                typename boost::enable_if_has_type<typename range_iterator<R2>::type>::type>
+            {
+                typedef std::pair<
+                    typename range_iterator<R>::type
+                    , typename range_iterator<R2>::type
+                > type;
+            };
+#endif
         }
 
         struct mismatch
@@ -479,6 +549,18 @@ namespace boost { namespace phoenix {
                 : result_of::mismatch<R, I, P>
             {};
 
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX14_ALGORITHMS
+            template<typename This, class R, class R2>
+            struct result<This(R&, R2&)>
+                : result_of::mismatch<R1, R2>
+            {};
+
+            template<typename This, class R, class R2, class P>
+            struct result<This(R&, R2&, P)>
+                : result_of::mismatch<R, R2, P>
+            {};
+#endif
+
             template<class R, class I>
             typename result_of::mismatch<R, I>::type
             operator()(R& r, I i) const
@@ -492,6 +574,25 @@ namespace boost { namespace phoenix {
             {
                 return std::mismatch(detail::begin_(r), detail::end_(r), i, p);
             }
+
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX14_ALGORITHMS
+            template<class R, class R2>
+            typename result_of::mismatch<R, R2>::type
+            operator()(R& r, R2& r2) const
+            {
+                return std::mismatch(detail::begin_(r), detail::end_(r)
+                                    , detail::begin_(r2), detail::end_(r2));
+            }
+
+            template<class R, class R2, class P>
+            typename result_of::mismatch<R, R2, P>::type
+            operator()(R& r, R2& r2, P p) const
+            {
+                return std::mismatch(detail::begin_(r), detail::end_(r)
+                                    , detail::begin_(r2), detail::end_(r2)
+                                    , p);
+            }
+#endif
         };
 
         struct binary_search 
@@ -595,6 +696,50 @@ namespace boost { namespace phoenix {
             }
         };
 
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX11_ALGORITHMS
+        namespace result_of
+        {
+            template <typename R, typename C = void>
+            struct minmax_element
+            {
+                typedef std::pair<
+                    typename range_iterator<R>::type
+                    , typename range_iterator<R>::type
+                > type;
+            };
+        }
+
+        struct minmax_element
+        {
+            template <typename Sig>
+            struct result;
+
+            template <typename This, class R>
+            struct result<This(R&)>
+                : result_of::minmax_element<R>
+            {};
+
+            template <typename This, class R, class C>
+            struct result<This(R&, C)>
+                : result_of::minmax_element<R, C>
+            {};
+
+            template<class R>
+            typename result_of::minmax_element<R>::type
+            operator()(R& r) const
+            {
+                return std::minmax_element(detail::begin_(r), detail::end_(r));
+            }
+
+            template<class R, class C>
+            typename result_of::minmax_element<R, C>::type
+            operator()(R& r, C c) const
+            {
+                return std::minmax_element(detail::begin_(r), detail::end_(r), c);
+            }
+        };
+#endif
+
         struct lexicographical_compare
         {
             typedef bool result_type;
@@ -619,10 +764,155 @@ namespace boost { namespace phoenix {
             }
         };
 
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX11_ALGORITHMS
+        struct is_partitioned
+        {
+            typedef bool result_type;
+
+            template<class R, class P>
+            bool operator()(R& r, P p) const
+            {
+                return std::is_partitioned(detail::begin_(r), detail::end_(r), p);
+            }
+        };
+
+        struct is_sorted
+        {
+            typedef bool result_type;
+
+            template<class R>
+            bool operator()(R& r) const
+            {
+                return std::is_sorted(detail::begin_(r), detail::end_(r));
+            }
+
+            template<class R, class C>
+            bool operator()(R& r, C c) const
+            {
+                return std::is_sorted(detail::begin_(r), detail::end_(r), c);
+            }
+        };
+
+        struct is_sorted_until
+        {
+            template <typename Sig>
+            struct result;
+
+            template <typename This, class R>
+            struct result<This(R&)>
+                : range_iterator<R>
+            {};
+
+            template <typename This, class R, class C>
+            struct result<This(R&, C)>
+                : range_iterator<R>
+            {};
+
+            template<class R>
+            typename range_iterator<R>::type
+            operator()(R& r) const
+            {
+                return std::is_sorted_until(detail::begin_(r), detail::end_(r));
+            }
+
+            template<class R, class C>
+            typename range_iterator<R>::type
+            operator()(R& r, C c) const
+            {
+                return std::is_sorted_until(detail::begin_(r), detail::end_(r), c);
+            }
+        };
+
+        struct is_heap
+        {
+            typedef bool result_type;
+
+            template<class R>
+            bool operator()(R& r) const
+            {
+                return std::is_heap(detail::begin_(r), detail::end_(r));
+            }
+
+            template<class R, class C>
+            bool operator()(R& r, C c) const
+            {
+                return std::is_heap(detail::begin_(r), detail::end_(r), c);
+            }
+        };
+
+        struct is_heap_until
+        {
+            template <typename Sig>
+            struct result;
+
+            template <typename This, class R>
+            struct result<This(R&)>
+                : range_iterator<R>
+            {};
+
+            template <typename This, class R, class C>
+            struct result<This(R&, C)>
+                : range_iterator<R>
+            {};
+
+            template<class R>
+            typename range_iterator<R>::type
+            operator()(R& r) const
+            {
+                return std::is_heap_until(detail::begin_(r), detail::end_(r));
+            }
+
+            template<class R, class C>
+            typename range_iterator<R>::type
+            operator()(R& r, C c) const
+            {
+                return std::is_heap_until(detail::begin_(r), detail::end_(r), c);
+            }
+        };
+
+        struct is_permutation
+        {
+            typedef bool result_type;
+
+            template<class R, class I>
+            bool operator()(R& r, I i) const
+            {
+                return std::is_permutation(detail::begin_(r), detail::end_(r), i);
+            }
+
+            template<class R, class I, class P>
+            bool operator()(R& r, I i, P p) const
+            {
+                return std::is_permutation(detail::begin_(r), detail::end_(r), i, p);
+            }
+
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX14_ALGORITHMS
+            template<class R, class R2>
+            typename boost::enable_if_has_type<typename range_iterator<R2>::type, bool>::type
+            bool operator()(R& r, R2& r) const
+            {
+                return std::is_permutation(detail::begin_(r), detail::end_(r)
+                                          , detail::begin_(r2), detail::end_(r2));
+            }
+
+            template<class R, class R2, class P>
+            typename boost::enable_if_has_type<typename range_iterator<R2>::type, bool>::type
+            operator()(R& r, R2& r, P p) const
+            {
+                return std::is_permutation(detail::begin_(r), detail::end_(r)
+                                          , detail::begin_(r2), detail::end_(r2)
+                                          , p);
+            }
+#endif
+        };
+#endif
     }
 
     BOOST_PHOENIX_ADAPT_CALLABLE(find, impl::find, 2)
     BOOST_PHOENIX_ADAPT_CALLABLE(find_if, impl::find_if, 2)
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX11_ALGORITHMS
+    BOOST_PHOENIX_ADAPT_CALLABLE(find_if_not, impl::find_if_not, 2)
+#endif
     BOOST_PHOENIX_ADAPT_CALLABLE(find_end, impl::find_end, 2)
     BOOST_PHOENIX_ADAPT_CALLABLE(find_end, impl::find_end, 3)
     BOOST_PHOENIX_ADAPT_CALLABLE(find_first_of, impl::find_first_of, 2)
@@ -652,9 +942,25 @@ namespace boost { namespace phoenix {
     BOOST_PHOENIX_ADAPT_CALLABLE(min_element, impl::min_element, 2)
     BOOST_PHOENIX_ADAPT_CALLABLE(max_element, impl::max_element, 1)
     BOOST_PHOENIX_ADAPT_CALLABLE(max_element, impl::max_element, 2)
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX11_ALGORITHMS
+    BOOST_PHOENIX_ADAPT_CALLABLE(minmax_element, impl::minmax_element, 1)
+    BOOST_PHOENIX_ADAPT_CALLABLE(minmax_element, impl::minmax_element, 2)
+#endif
     BOOST_PHOENIX_ADAPT_CALLABLE(lexicographical_compare, impl::lexicographical_compare, 2)
     BOOST_PHOENIX_ADAPT_CALLABLE(lexicographical_compare, impl::lexicographical_compare, 3)
-
+#ifdef BOOST_PHOENIX_EXPERIMENTAL_CXX11_ALGORITHMS
+    BOOST_PHOENIX_ADAPT_CALLABLE(is_partitioned, impl::is_partitioned, 2)
+    BOOST_PHOENIX_ADAPT_CALLABLE(is_sorted, impl::is_sorted, 1)
+    BOOST_PHOENIX_ADAPT_CALLABLE(is_sorted, impl::is_sorted, 2)
+    BOOST_PHOENIX_ADAPT_CALLABLE(is_sorted_until, impl::is_sorted_until, 1)
+    BOOST_PHOENIX_ADAPT_CALLABLE(is_sorted_until, impl::is_sorted_until, 2)
+    BOOST_PHOENIX_ADAPT_CALLABLE(is_heap, impl::is_heap, 1)
+    BOOST_PHOENIX_ADAPT_CALLABLE(is_heap, impl::is_heap, 2)
+    BOOST_PHOENIX_ADAPT_CALLABLE(is_heap_until, impl::is_heap_until, 1)
+    BOOST_PHOENIX_ADAPT_CALLABLE(is_heap_until, impl::is_heap_until, 2)
+    BOOST_PHOENIX_ADAPT_CALLABLE(is_permutation, impl::is_permutation, 2)
+    BOOST_PHOENIX_ADAPT_CALLABLE(is_permutation, impl::is_permutation, 3)
+#endif
 }}
 
 #endif
